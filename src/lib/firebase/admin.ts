@@ -40,7 +40,7 @@ function parseServiceAccountBase64(base64: string): ServiceAccountCredentials {
       clientEmail: parsed.client_email,
       privateKey: parsed.private_key,
     };
-  } catch (error) {
+  } catch {
     throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64. Ensure it is valid Base64-encoded JSON.');
   }
 }
