@@ -64,8 +64,12 @@ function loadEnvFile() {
 
 /**
  * Required environment variables
+ * 
+ * For production deployments (Sevalla, Vercel, etc.), FIREBASE_SERVICE_ACCOUNT_BASE64
+ * is strongly recommended over individual FIREBASE_* variables because it avoids
+ * escape character issues with private keys.
  */
-const requiredVars = [
+const requiredClientVars = [
   {
     key: 'NEXT_PUBLIC_FIREBASE_API_KEY',
     description: 'Firebase API Key (Web App config)',
@@ -102,6 +106,12 @@ const requiredVars = [
     validate: (val) => val.includes(':') && val.includes(':web:'),
     errorMsg: 'Should be in format "1:xxx:web:xxx"',
   },
+];
+
+/**
+ * Admin SDK variables - used when FIREBASE_SERVICE_ACCOUNT_BASE64 is NOT set
+ */
+const requiredAdminVars = [
   {
     key: 'FIREBASE_PROJECT_ID',
     description: 'Firebase Admin Project ID',
@@ -127,6 +137,34 @@ const requiredVars = [
 ];
 
 /**
+ * Validate Base64-encoded service account
+ */
+function validateBase64ServiceAccount(base64) {
+  try {
+    const cleanedBase64 = base64.replace(/\s/g, '');
+    const json = Buffer.from(cleanedBase64, 'base64').toString('utf-8');
+    const parsed = JSON.parse(json);
+    
+    const requiredFields = ['project_id', 'client_email', 'private_key'];
+    const missingFields = requiredFields.filter(field => !parsed[field]);
+    
+    if (missingFields.length > 0) {
+      return { valid: false, error: `Missing fields in decoded JSON: ${missingFields.join(', ')}` };
+    }
+    
+    // Validate the private key format
+    const pk = parsed.private_key;
+    if (!pk.includes('-----BEGIN PRIVATE KEY-----') || !pk.includes('-----END PRIVATE KEY-----')) {
+      return { valid: false, error: 'Invalid private key format in decoded JSON' };
+    }
+    
+    return { valid: true, projectId: parsed.project_id };
+  } catch (error) {
+    return { valid: false, error: `Failed to decode: ${error.message}` };
+  }
+}
+
+/**
  * Main verification function
  */
 function verify() {
@@ -142,8 +180,10 @@ function verify() {
   let allValid = true;
   const results = [];
 
-  // Check each required variable
-  for (const variable of requiredVars) {
+  // Check client-side variables (always required)
+  console.log(`${colors.bold}Checking client-side Firebase variables...${colors.reset}\n`);
+  
+  for (const variable of requiredClientVars) {
     const value = process.env[variable.key];
     
     if (!value) {
@@ -170,9 +210,7 @@ function verify() {
     }
   }
 
-  // Print results
-  console.log(`${colors.bold}Checking environment variables...${colors.reset}\n`);
-  
+  // Print client results
   for (const result of results) {
     if (result.status === 'valid') {
       console.log(`  ${colors.green}✓${colors.reset} ${result.key}`);
@@ -185,18 +223,71 @@ function verify() {
     }
   }
 
-  // Test private key parsing
-  console.log(`\n${colors.bold}Testing private key format...${colors.reset}\n`);
+  // Check admin SDK configuration
+  console.log(`\n${colors.bold}Checking Firebase Admin SDK configuration...${colors.reset}\n`);
   
-  try {
-    const pk = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-    if (pk && pk.includes('-----BEGIN PRIVATE KEY-----')) {
-      console.log(`  ${colors.green}✓${colors.reset} Private key format is valid`);
+  const hasBase64 = !!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  const hasIndividual = !!(process.env.FIREBASE_PROJECT_ID && 
+                          process.env.FIREBASE_CLIENT_EMAIL && 
+                          process.env.FIREBASE_PRIVATE_KEY);
+
+  if (hasBase64) {
+    // Validate Base64 method (recommended)
+    console.log(`  ${colors.cyan}Using Base64-encoded service account (recommended)${colors.reset}\n`);
+    const base64Result = validateBase64ServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64);
+    
+    if (base64Result.valid) {
+      console.log(`  ${colors.green}✓${colors.reset} FIREBASE_SERVICE_ACCOUNT_BASE64`);
+      console.log(`    ${colors.cyan}└─ Project ID: ${base64Result.projectId}${colors.reset}`);
     } else {
-      throw new Error('Invalid key format');
+      console.log(`  ${colors.red}✗${colors.reset} FIREBASE_SERVICE_ACCOUNT_BASE64 - ${colors.red}INVALID${colors.reset}`);
+      console.log(`    ${colors.yellow}└─ ${base64Result.error}${colors.reset}`);
+      console.log(`    ${colors.yellow}└─ Generate with: node scripts/encode-service-account.js <path-to-json>${colors.reset}`);
+      allValid = false;
     }
-  } catch (e) {
-    console.log(`  ${colors.red}✗${colors.reset} Private key parse error: ${e.message}`);
+  } else if (hasIndividual) {
+    // Validate individual variables method
+    console.log(`  ${colors.yellow}Using individual environment variables${colors.reset}`);
+    console.log(`  ${colors.yellow}⚠ For production deployments, use FIREBASE_SERVICE_ACCOUNT_BASE64 instead${colors.reset}`);
+    console.log(`  ${colors.yellow}  to avoid private key escape character issues.${colors.reset}\n`);
+    
+    for (const variable of requiredAdminVars) {
+      const value = process.env[variable.key];
+      
+      if (!value) {
+        console.log(`  ${colors.red}✗${colors.reset} ${variable.key} - ${colors.red}MISSING${colors.reset}`);
+        console.log(`    ${colors.yellow}└─ ${variable.description}${colors.reset}`);
+        allValid = false;
+      } else if (!variable.validate(value)) {
+        console.log(`  ${colors.red}✗${colors.reset} ${variable.key} - ${colors.red}INVALID${colors.reset}`);
+        console.log(`    ${colors.yellow}└─ ${variable.errorMsg}${colors.reset}`);
+        allValid = false;
+      } else {
+        console.log(`  ${colors.green}✓${colors.reset} ${variable.key}`);
+      }
+    }
+    
+    // Test private key parsing
+    console.log(`\n${colors.bold}Testing private key format...${colors.reset}\n`);
+    
+    try {
+      const pk = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+      if (pk && pk.includes('-----BEGIN PRIVATE KEY-----')) {
+        console.log(`  ${colors.green}✓${colors.reset} Private key format appears valid`);
+        console.log(`  ${colors.yellow}⚠ Note: This may still fail in production if escape characters are stripped.${colors.reset}`);
+        console.log(`  ${colors.yellow}  If deployment fails, switch to FIREBASE_SERVICE_ACCOUNT_BASE64.${colors.reset}`);
+      } else {
+        throw new Error('Invalid key format');
+      }
+    } catch (e) {
+      console.log(`  ${colors.red}✗${colors.reset} Private key parse error: ${e.message}`);
+      allValid = false;
+    }
+  } else {
+    // No admin configuration found
+    console.log(`  ${colors.red}✗${colors.reset} No Firebase Admin SDK credentials found`);
+    console.log(`    ${colors.yellow}└─ Set FIREBASE_SERVICE_ACCOUNT_BASE64 (recommended for production)${colors.reset}`);
+    console.log(`    ${colors.yellow}└─ Or set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY${colors.reset}`);
     allValid = false;
   }
 
@@ -209,8 +300,7 @@ function verify() {
     process.exit(0);
   } else {
     console.log(`\n  ${colors.red}${colors.bold}✗ Environment validation failed.${colors.reset}`);
-    console.log(`  ${colors.yellow}Please fix the issues above before proceeding.${colors.reset}`);
-    console.log(`  ${colors.yellow}Refer to PHASE_0_ENVIRONMENT_REQUIREMENTS.md for details.${colors.reset}\n`);
+    console.log(`  ${colors.yellow}Please fix the issues above before proceeding.${colors.reset}\n`);
     process.exit(1);
   }
 }

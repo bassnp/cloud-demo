@@ -30,56 +30,97 @@ interface ServiceAccountCredentials {
 
 /**
  * Parse service account from Base64-encoded JSON
+ * 
+ * Base64 encoding is the recommended method for production deployments
+ * because it avoids escape character issues that occur when platforms
+ * like Sevalla, Vercel, or AWS strip backslashes from environment variables.
  */
 function parseServiceAccountBase64(base64: string): ServiceAccountCredentials {
   try {
-    const json = Buffer.from(base64, 'base64').toString('utf-8');
+    // Clean any whitespace that may have been introduced during copy/paste
+    const cleanedBase64 = base64.replace(/\s/g, '');
+    const json = Buffer.from(cleanedBase64, 'base64').toString('utf-8');
     const parsed = JSON.parse(json);
+    
+    if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+      throw new Error('Missing required fields in service account JSON');
+    }
+    
     return {
       projectId: parsed.project_id,
       clientEmail: parsed.client_email,
-      privateKey: parsed.private_key,
+      // Ensure private key has proper newlines (apply sanitization as safety measure)
+      privateKey: sanitizePrivateKey(parsed.private_key),
     };
-  } catch {
-    throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64. Ensure it is valid Base64-encoded JSON.');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new Error(
+      `Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64: ${message}\n` +
+      'Ensure the value is valid Base64-encoded service account JSON.\n' +
+      'Generate it with: node scripts/encode-service-account.js <path-to-json>'
+    );
   }
 }
 
 /**
  * Sanitize and reconstruct the private key for Firebase Admin SDK
  * 
+ * This function handles various malformed private key formats that occur
+ * when environment variables are improperly escaped by deployment platforms.
+ * 
+ * Common issues this handles:
+ * - Escaped newlines as literal "\n" strings
+ * - Double-escaped newlines "\\n"
+ * - Keys with quotes wrapped around them
+ * - Keys on a single line without any newlines
+ * 
  * PEM format requires:
- * - Header on its own line
+ * - Header on its own line: "-----BEGIN PRIVATE KEY-----"
  * - Base64 content in 64-character lines
- * - Footer on its own line
+ * - Footer on its own line: "-----END PRIVATE KEY-----"
  */
 function sanitizePrivateKey(key: string): string {
   let sanitized = key.trim();
   
-  // Remove surrounding quotes if present
+  // Remove surrounding quotes if present (common in env var copy/paste errors)
   if ((sanitized.startsWith('"') && sanitized.endsWith('"')) ||
       (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
     sanitized = sanitized.slice(1, -1);
   }
   
-  // Handle escaped newlines
-  sanitized = sanitized.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
+  // Handle various escape patterns in order of specificity
+  // Order matters: handle double-escapes before single escapes
+  sanitized = sanitized
+    .replace(/\\\\n/g, '\n')  // Double-escaped: \\n -> actual newline
+    .replace(/\\n/g, '\n');    // Single-escaped: \n -> actual newline
   
-  // Check if key is properly formatted (has actual newlines)
-  if (sanitized.includes('\n')) {
+  // Check if key now has proper newlines
+  if (sanitized.includes('\n') && 
+      sanitized.includes('-----BEGIN PRIVATE KEY-----') &&
+      sanitized.includes('-----END PRIVATE KEY-----')) {
     return sanitized;
   }
   
-  // Key is on a single line - reconstruct proper PEM format
+  // Key is malformed - attempt to reconstruct proper PEM format
   const header = '-----BEGIN PRIVATE KEY-----';
   const footer = '-----END PRIVATE KEY-----';
   
-  const base64Content = sanitized
+  // Extract only the Base64 content between header and footer
+  let base64Content = sanitized
     .replace(header, '')
     .replace(footer, '')
+    .replace(/[\s\r\n]/g, '') // Remove all whitespace
     .trim();
   
-  // Split into 64-character lines (PEM standard)
+  // Validate we have something that looks like Base64
+  if (!/^[A-Za-z0-9+/=]+$/.test(base64Content)) {
+    throw new Error(
+      'Invalid private key format. The key contains invalid characters. ' +
+      'Ensure you are using the correct private key from your service account JSON.'
+    );
+  }
+  
+  // Reconstruct proper PEM with 64-character lines (PEM standard)
   const lines: string[] = [];
   for (let i = 0; i < base64Content.length; i += 64) {
     lines.push(base64Content.substring(i, i + 64));
