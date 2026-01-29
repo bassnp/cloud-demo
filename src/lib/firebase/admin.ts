@@ -6,80 +6,123 @@
  * 
  * SECURITY: The 'server-only' import ensures this module CANNOT be imported
  * in client components. The build will fail if this is attempted.
+ * 
+ * CREDENTIALS: Supports two methods:
+ * 1. FIREBASE_SERVICE_ACCOUNT_BASE64 - Base64 encoded service account JSON (recommended for production)
+ * 2. Individual env vars: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
  */
 
 import 'server-only';
 
-import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, type App, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getStorage, type Storage } from 'firebase-admin/storage';
 
 /**
- * Validate that all required environment variables are set
- * 
- * Throws a descriptive error if any are missing to fail fast
- * during development rather than with cryptic runtime errors.
+ * Service Account credentials interface
  */
-function validateEnvironment(): void {
-  const required = [
-    'FIREBASE_PROJECT_ID',
-    'FIREBASE_CLIENT_EMAIL',
-    'FIREBASE_PRIVATE_KEY',
-  ];
+interface ServiceAccountCredentials {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+}
 
-  const missing = required.filter((key) => !process.env[key]);
-
-  if (missing.length > 0) {
-    throw new Error(
-      `Missing Firebase Admin environment variables: ${missing.join(', ')}. ` +
-      'Please check your .env.local file.'
-    );
+/**
+ * Parse service account from Base64-encoded JSON
+ */
+function parseServiceAccountBase64(base64: string): ServiceAccountCredentials {
+  try {
+    const json = Buffer.from(base64, 'base64').toString('utf-8');
+    const parsed = JSON.parse(json);
+    return {
+      projectId: parsed.project_id,
+      clientEmail: parsed.client_email,
+      privateKey: parsed.private_key,
+    };
+  } catch (error) {
+    throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_BASE64. Ensure it is valid Base64-encoded JSON.');
   }
 }
 
 /**
- * Sanitize the private key for Firebase Admin SDK
+ * Sanitize and reconstruct the private key for Firebase Admin SDK
  * 
- * Handles various edge cases with private key formatting:
- * - Base64 encoded keys (recommended for production)
- * - Escaped newlines (\\n) from environment variables
- * - Double-escaped newlines (\\\\n) from some hosting platforms
- * - Quoted keys that may have extra escape sequences
+ * PEM format requires:
+ * - Header on its own line
+ * - Base64 content in 64-character lines
+ * - Footer on its own line
  */
 function sanitizePrivateKey(key: string): string {
   let sanitized = key.trim();
   
-  // Remove surrounding quotes if present (some platforms add them)
+  // Remove surrounding quotes if present
   if ((sanitized.startsWith('"') && sanitized.endsWith('"')) ||
       (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
     sanitized = sanitized.slice(1, -1);
   }
   
-  // Check if the key is Base64 encoded (doesn't start with -----)
-  if (!sanitized.startsWith('-----')) {
-    try {
-      sanitized = Buffer.from(sanitized, 'base64').toString('utf-8');
-    } catch {
-      // Not valid Base64, continue with original
-    }
+  // Handle escaped newlines
+  sanitized = sanitized.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
+  
+  // Check if key is properly formatted (has actual newlines)
+  if (sanitized.includes('\n')) {
+    return sanitized;
   }
   
-  // Handle double-escaped newlines first (\\\\n -> \n)
-  sanitized = sanitized.replace(/\\\\n/g, '\n');
+  // Key is on a single line - reconstruct proper PEM format
+  const header = '-----BEGIN PRIVATE KEY-----';
+  const footer = '-----END PRIVATE KEY-----';
   
-  // Handle single-escaped newlines (\\n -> \n)
-  sanitized = sanitized.replace(/\\n/g, '\n');
+  const base64Content = sanitized
+    .replace(header, '')
+    .replace(footer, '')
+    .trim();
   
-  return sanitized;
+  // Split into 64-character lines (PEM standard)
+  const lines: string[] = [];
+  for (let i = 0; i < base64Content.length; i += 64) {
+    lines.push(base64Content.substring(i, i + 64));
+  }
+  
+  return `${header}\n${lines.join('\n')}\n${footer}\n`;
+}
+
+/**
+ * Get service account credentials from environment
+ * 
+ * Priority:
+ * 1. FIREBASE_SERVICE_ACCOUNT_BASE64 (recommended for production)
+ * 2. Individual environment variables
+ */
+function getServiceAccountCredentials(): ServiceAccountCredentials {
+  // Method 1: Base64-encoded service account JSON (recommended)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    return parseServiceAccountBase64(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64);
+  }
+  
+  // Method 2: Individual environment variables
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  
+  if (!projectId || !clientEmail || !privateKey) {
+    throw new Error(
+      'Missing Firebase Admin credentials. Set either:\n' +
+      '1. FIREBASE_SERVICE_ACCOUNT_BASE64 (recommended), or\n' +
+      '2. FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY'
+    );
+  }
+  
+  return {
+    projectId,
+    clientEmail,
+    privateKey: sanitizePrivateKey(privateKey),
+  };
 }
 
 /**
  * Initialize Firebase Admin App (singleton pattern)
- * 
- * The Admin SDK should only be initialized once per Node.js process.
- * This checks for existing apps to prevent duplicate initialization
- * during hot module reloading in development.
  */
 function getFirebaseAdminApp(): App {
   const existingApps = getApps();
@@ -88,17 +131,10 @@ function getFirebaseAdminApp(): App {
     return existingApps[0];
   }
 
-  // Validate environment before attempting initialization
-  validateEnvironment();
-
-  const privateKey = sanitizePrivateKey(process.env.FIREBASE_PRIVATE_KEY!);
+  const credentials = getServiceAccountCredentials();
 
   return initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID!,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL!,
-      privateKey,
-    }),
+    credential: cert(credentials as ServiceAccount),
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   });
 }
