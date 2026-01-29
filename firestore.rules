@@ -1,0 +1,124 @@
+rules_version = '2';
+
+/**
+ * Firestore Security Rules
+ *
+ * These rules protect the database from unauthorized access.
+ * They are the true security perimeter - client-side checks are for UX only.
+ */
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+
+    /**
+     * Check if the request is from an authenticated user
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Check if the authenticated user is the owner of the document
+     * @param userId - The user ID to check against
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Check if the authenticated user is an admin
+     * Uses custom claim set by Admin SDK
+     */
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    /**
+     * Validate that required fields exist in the incoming data
+     * @param fields - List of required field names
+     */
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ========================================================================
+    // USERS COLLECTION
+    // ========================================================================
+
+    match /users/{userId} {
+      // Any authenticated user can read user profiles (for displaying owner info)
+      allow read: if isSignedIn();
+
+      // Users can only create their own profile
+      allow create: if isOwner(userId) &&
+        hasRequiredFields(['uid', 'email', 'createdAt']) &&
+        request.resource.data.uid == userId;
+
+      // Users can update their own profile (limited fields)
+      allow update: if isOwner(userId) &&
+        // Prevent changing critical fields
+        request.resource.data.uid == resource.data.uid &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.createdAt == resource.data.createdAt;
+
+      // Users cannot delete their own profile (admin only via Admin SDK)
+      allow delete: if false;
+
+      // ======================================================================
+      // IMAGES SUBCOLLECTION
+      // ======================================================================
+
+      match /images/{imageId} {
+        // Public images can be read by anyone (authenticated)
+        // Private images can only be read by owner
+        allow read: if isSignedIn() &&
+          (resource.data.isPublic == true || isOwner(userId));
+
+        // Users can create images in their own collection
+        allow create: if isOwner(userId) &&
+          hasRequiredFields(['userId', 'filename', 'url', 'storagePath', 'contentType', 'size', 'isPublic', 'createdAt']) &&
+          request.resource.data.userId == userId;
+
+        // Users can update their own images
+        allow update: if isOwner(userId) &&
+          // Prevent changing ownership
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.createdAt == resource.data.createdAt;
+
+        // Users can delete their own images
+        allow delete: if isOwner(userId);
+      }
+
+      // ======================================================================
+      // FAVORITES SUBCOLLECTION
+      // ======================================================================
+
+      match /favorites/{imageId} {
+        // Users can read their own favorites
+        allow read: if isOwner(userId);
+
+        // Users can create favorites in their own collection
+        allow create: if isOwner(userId) &&
+          hasRequiredFields(['imageId', 'ownerId', 'favoritedAt']) &&
+          request.resource.data.imageId == imageId;
+
+        // Users can delete their own favorites
+        allow delete: if isOwner(userId);
+
+        // No updates allowed (delete and recreate instead)
+        allow update: if false;
+      }
+    }
+
+    // ========================================================================
+    // PUBLIC IMAGES QUERY (for aggregation queries)
+    // ========================================================================
+
+    // Note: For collection group queries on all images,
+    // you'll need to enable collection group queries in Firebase Console
+    // and add appropriate indexes
+  }
+}

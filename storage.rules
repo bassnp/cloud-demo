@@ -1,0 +1,109 @@
+rules_version = '2';
+
+/**
+ * Firebase Storage Security Rules
+ *
+ * These rules protect file uploads and access.
+ * They validate MIME types and file sizes at the storage layer.
+ */
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+
+    /**
+     * Check if the request is from an authenticated user
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Check if the authenticated user is the owner
+     * @param userId - The user ID to check against
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Validate that the file is an allowed image type
+     */
+    function isValidImageType() {
+      return request.resource.contentType.matches('image/.*') &&
+        (request.resource.contentType == 'image/jpeg' ||
+         request.resource.contentType == 'image/png' ||
+         request.resource.contentType == 'image/gif' ||
+         request.resource.contentType == 'image/webp');
+    }
+
+    /**
+     * Validate that the file size is within limits (5MB)
+     */
+    function isValidFileSize() {
+      return request.resource.size < 5 * 1024 * 1024;
+    }
+
+    // ========================================================================
+    // USER IMAGES
+    // ========================================================================
+
+    /**
+     * User-uploaded images
+     * Path: /users/{userId}/images/{filename}
+     *
+     * - Read: Anyone authenticated can read (for public images)
+     * - Write: Only owner, with MIME type and size validation
+     * - Delete: Only owner
+     */
+    match /users/{userId}/images/{allPaths=**} {
+      // Allow read for authenticated users
+      allow read: if isSignedIn();
+
+      // Allow write only if:
+      // 1. User owns this path
+      // 2. File is a valid image type
+      // 3. File is under 5MB
+      allow write: if isOwner(userId) &&
+        isValidImageType() &&
+        isValidFileSize();
+
+      // Allow delete only for owner
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================================================
+    // USER AVATARS
+    // ========================================================================
+
+    /**
+     * User profile avatars
+     * Path: /users/{userId}/avatar/{filename}
+     *
+     * - Read: Anyone authenticated
+     * - Write: Only owner, with MIME type and size validation
+     */
+    match /users/{userId}/avatar/{filename} {
+      allow read: if isSignedIn();
+
+      allow write: if isOwner(userId) &&
+        isValidImageType() &&
+        request.resource.size < 2 * 1024 * 1024; // 2MB limit for avatars
+
+      allow delete: if isOwner(userId);
+    }
+
+    // ========================================================================
+    // DEFAULT DENY
+    // ========================================================================
+
+    /**
+     * Deny all other paths by default
+     */
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

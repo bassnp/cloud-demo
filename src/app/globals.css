@@ -1,0 +1,376 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Global Styles - Cloud Demo Design System
+ * 
+ * CSS custom properties implementing the brand color palette.
+ * Uses HSL color values for consistent light/dark mode support.
+ * 
+ * Brand Colors:
+ * - Pacific Blue (#14d9eb): Primary actions, links, active states
+ * - Lime Moss (#aeff00): Success, public badges, checkmarks
+ * - Tangerine Dream (#f15d0e): Destructive, errors, warnings
+ * - Porcelain: Neutral/muted tones
+ * - Oxford Navy: Dark mode base
+ */
+@layer base {
+  :root {
+    /* ===========================================
+       LIGHT MODE - Darker Pacific Blue for Contrast
+       =========================================== */
+    
+    /* Core backgrounds - Porcelain 50 for warmth */
+    --background: 40 20% 96%;
+    --foreground: 30 33% 9%;
+    
+    /* Cards & Surfaces - Pure white for contrast */
+    --card: 0 0% 100%;
+    --card-foreground: 30 33% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 33% 9%;
+    
+    /* Pacific Blue Primary - USE 600/700 range for darker contrast */
+    --primary: 186 86% 37%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Porcelain Secondary */
+    --secondary: 40 24% 93%;
+    --secondary-foreground: 30 33% 20%;
+    
+    /* Muted - Porcelain tones */
+    --muted: 40 24% 93%;
+    --muted-foreground: 35 18% 40%;
+    
+    /* Pacific Blue Accent - Darker tint */
+    --accent: 186 50% 90%;
+    --accent-foreground: 186 86% 30%;
+    
+    /* Tangerine Destructive - #f15d0e at 500 */
+    --destructive: 18 92% 50%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Lime Moss Success - #aeff00 at 500 */
+    --success: 75 100% 50%;
+    --success-foreground: 75 100% 10%;
+    
+    /* Borders & Inputs - Warm gray */
+    --border: 40 18% 88%;
+    --input: 40 18% 88%;
+    --ring: 186 86% 40%;
+    
+    /* Increased radius for modern feel */
+    --radius: 0.75rem;
+    
+    /* Charts - Brand color palette */
+    --chart-1: 186 86% 37%;
+    --chart-2: 75 100% 50%;
+    --chart-3: 217 69% 50%;
+    --chart-4: 18 92% 50%;
+    --chart-5: 40 50% 50%;
+    
+    /* Sidebar - Darker Pacific Blue tint */
+    --sidebar-background: 186 30% 97%;
+    --sidebar-foreground: 186 40% 15%;
+    --sidebar-primary: 186 86% 37%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 186 40% 92%;
+    --sidebar-accent-foreground: 186 86% 30%;
+    --sidebar-border: 186 20% 88%;
+    --sidebar-ring: 186 86% 40%;
+  }
+
+  .dark {
+    /* ===========================================
+       DARK MODE - Lime Moss + Pure Black Theme
+       =========================================== */
+    
+    /* Core backgrounds - True Black base */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
+    
+    /* Cards & Surfaces - Near-black with subtle lime warmth */
+    --card: 75 5% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 75 5% 8%;
+    --popover-foreground: 0 0% 95%;
+    
+    /* Lime Moss Primary - Electric green */
+    --primary: 75 100% 50%;
+    --primary-foreground: 0 0% 4%;
+    
+    /* Lime-tinted Secondary */
+    --secondary: 75 10% 12%;
+    --secondary-foreground: 75 50% 90%;
+    
+    /* Muted - Dark with lime undertone */
+    --muted: 75 5% 15%;
+    --muted-foreground: 75 20% 55%;
+    
+    /* Lime Moss Accent - Glowing green */
+    --accent: 75 50% 15%;
+    --accent-foreground: 75 100% 65%;
+    
+    /* Tangerine Destructive */
+    --destructive: 18 92% 55%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Lime Moss Success */
+    --success: 75 100% 50%;
+    --success-foreground: 0 0% 4%;
+    
+    /* Borders & Inputs - Subtle lime edges */
+    --border: 75 10% 18%;
+    --input: 75 10% 18%;
+    --ring: 75 100% 50%;
+    
+    /* Charts - Lime-centric palette */
+    --chart-1: 75 100% 50%;
+    --chart-2: 90 80% 45%;
+    --chart-3: 60 70% 50%;
+    --chart-4: 18 92% 55%;
+    --chart-5: 186 86% 50%;
+    
+    /* Sidebar - Deep black with lime highlights */
+    --sidebar-background: 75 5% 6%;
+    --sidebar-foreground: 75 20% 85%;
+    --sidebar-primary: 75 100% 50%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 75 30% 12%;
+    --sidebar-accent-foreground: 75 100% 65%;
+    --sidebar-border: 75 10% 15%;
+    --sidebar-ring: 75 100% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+
+/* ===========================================
+   UTILITY CLASSES - Cloud Demo Design System
+   =========================================== */
+@layer utilities {
+  /* Gradient text - Theme-aware: Pacific Blue (light) / Lime Moss (dark) */
+  .text-gradient {
+    @apply bg-gradient-to-r from-pacific-blue-600 to-pacific-blue-400 bg-clip-text text-transparent;
+  }
+  
+  .dark .text-gradient {
+    @apply from-lime-moss-400 to-lime-moss-600;
+  }
+  
+  /* Glassmorphism effect - Theme-aware */
+  .glass {
+    @apply bg-white/80 backdrop-blur-xl border border-white/20;
+  }
+  
+  .dark .glass {
+    @apply bg-lime-moss-950/80 border-lime-moss-800/30;
+  }
+  
+  /* Glow effects - Primary color aware */
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(186 86% 37% / 30%);
+  }
+  
+  .dark .glow-primary {
+    box-shadow: 0 0 20px hsl(75 100% 50% / 40%);
+  }
+  
+  .glow-success {
+    box-shadow: 0 0 20px hsl(75 100% 50% / 30%);
+  }
+  
+  .glow-danger {
+    box-shadow: 0 0 20px hsl(18 92% 50% / 30%);
+  }
+  
+  /* Shimmer animation for loading states */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+  
+  /* Shimmer keyframes for progress bar effect */
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+  }
+}
+
+/* ===========================================
+   PAGE TRANSITION ANIMATIONS
+   =========================================== */
+@layer base {
+  /* Page content enters with smooth fade-up animation */
+  .page-enter {
+    animation: pageEnter 0.4s ease-out forwards;
+  }
+
+  @keyframes pageEnter {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Staggered children animation for lists/grids */
+  .stagger-enter > * {
+    opacity: 0;
+    animation: staggerFadeUp 0.4s ease-out forwards;
+  }
+
+  @keyframes staggerFadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Apply stagger delays */
+  .stagger-enter > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-enter > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-enter > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-enter > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-enter > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-enter > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-enter > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-enter > *:nth-child(8) { animation-delay: 350ms; }
+  .stagger-enter > *:nth-child(n+9) { animation-delay: 400ms; }
+}
+
+/* ===========================================
+   ENHANCED FOCUS STATES - Accessibility
+   =========================================== */
+@layer base {
+  /* Custom focus-visible ring for keyboard navigation */
+  :focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--background)),
+      0 0 0 4px hsl(var(--ring));
+    border-radius: var(--radius);
+  }
+
+  /* Remove default outline since we use box-shadow */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Skip link for accessibility */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .skip-link:focus {
+    position: fixed;
+    left: 1rem;
+    top: 1rem;
+    width: auto;
+    height: auto;
+    padding: 0.5rem 1rem;
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    z-index: 9999;
+    border-radius: var(--radius);
+  }
+}
+
+/* ===========================================
+   PERFORMANCE UTILITIES
+   =========================================== */
+@layer utilities {
+  /* GPU-accelerated transforms for smooth animations */
+  .gpu-accelerate {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* Will-change hints for frequently animated elements */
+  .will-transform {
+    will-change: transform;
+  }
+
+  .will-opacity {
+    will-change: opacity;
+  }
+
+  .will-shadow {
+    will-change: box-shadow;
+  }
+
+  /* Smooth scrolling container */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Prevent layout shifts during image load */
+  .aspect-preserved {
+    contain: layout style;
+  }
+}
+
+/* ===========================================
+   REDUCED MOTION SUPPORT - Accessibility
+   =========================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable page transitions */
+  .page-enter,
+  .stagger-enter > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* Disable will-change to save resources */
+  .will-transform,
+  .will-opacity,
+  .will-shadow {
+    will-change: auto !important;
+  }
+}
