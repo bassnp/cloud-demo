@@ -106,7 +106,7 @@ function sanitizePrivateKey(key: string): string {
   const footer = '-----END PRIVATE KEY-----';
   
   // Extract only the Base64 content between header and footer
-  let base64Content = sanitized
+  const base64Content = sanitized
     .replace(header, '')
     .replace(footer, '')
     .replace(/[\s\r\n]/g, '') // Remove all whitespace
