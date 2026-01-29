@@ -14,7 +14,7 @@
  * To set up admin: Create a Firebase Auth user with this email and password.
  * Change this value to your admin email address before deploying.
  */
-export const ADMIN_EMAIL = 'admin@example.com';
+export const ADMIN_EMAIL = 'test@admin.admin';
 
 /**
  * Check if a user is the admin
