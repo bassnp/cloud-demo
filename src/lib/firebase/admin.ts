@@ -39,13 +39,39 @@ function validateEnvironment(): void {
 }
 
 /**
- * Sanitize the private key by converting escaped newlines to actual newlines
+ * Sanitize the private key for Firebase Admin SDK
  * 
- * When deployed to production, the private key may have its newlines
- * escaped as \\n instead of \n. This function normalizes them.
+ * Handles various edge cases with private key formatting:
+ * - Base64 encoded keys (recommended for production)
+ * - Escaped newlines (\\n) from environment variables
+ * - Double-escaped newlines (\\\\n) from some hosting platforms
+ * - Quoted keys that may have extra escape sequences
  */
 function sanitizePrivateKey(key: string): string {
-  return key.replace(/\\n/g, '\n');
+  let sanitized = key.trim();
+  
+  // Remove surrounding quotes if present (some platforms add them)
+  if ((sanitized.startsWith('"') && sanitized.endsWith('"')) ||
+      (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
+    sanitized = sanitized.slice(1, -1);
+  }
+  
+  // Check if the key is Base64 encoded (doesn't start with -----)
+  if (!sanitized.startsWith('-----')) {
+    try {
+      sanitized = Buffer.from(sanitized, 'base64').toString('utf-8');
+    } catch {
+      // Not valid Base64, continue with original
+    }
+  }
+  
+  // Handle double-escaped newlines first (\\\\n -> \n)
+  sanitized = sanitized.replace(/\\\\n/g, '\n');
+  
+  // Handle single-escaped newlines (\\n -> \n)
+  sanitized = sanitized.replace(/\\n/g, '\n');
+  
+  return sanitized;
 }
 
 /**
